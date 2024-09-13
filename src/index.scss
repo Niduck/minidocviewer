@@ -1,0 +1,274 @@
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Asap:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+//@import "marked-admonition-extension/dist/index.css";
+.admonition{
+  @apply my-3;
+  &.admonition-note{
+    @apply border rounded-md border-gray-300 overflow-hidden;
+    .admonition-title{
+      &:before{
+        content:"📝";
+        @apply pr-1.5;
+      }
+      @apply px-3 py-1.5 bg-gray-50 text-gray-600;
+    }
+    p:not(.admonition-title){
+      @apply px-3 text-sm text-gray-600;
+    }
+  }
+  &.admonition-warning{
+    @apply border rounded-md border-orange-300 overflow-hidden;
+    .admonition-title{
+      &:before{
+        content:"⚠️";
+        @apply pr-1.5;
+      }
+      @apply px-3 py-1.5 bg-orange-50 text-orange-600;
+    }
+    p:not(.admonition-title){
+      @apply px-3 text-sm text-orange-600;
+    }
+  }
+  &.admonition-info{
+    @apply border rounded-md border-blue-300 overflow-hidden;
+    .admonition-title{
+      &:before{
+        content:"ℹ️";
+        @apply pr-1.5;
+      }
+      @apply px-3 py-1.5 bg-blue-50 text-blue-600;
+    }
+    p:not(.admonition-title){
+      @apply px-3 text-sm text-blue-600;
+    }
+  }
+}
+.emoji{
+  font-family: 'Noto Color Emoji', sans-serif;
+}
+svg{
+  color:currentColor;
+}
+.markdown-body{
+  height: 80vh;
+  overflow: auto;
+  .CodeMirror-fullscreen{
+    position: relative !important;
+    height: auto;
+    float: left;
+  }
+  .editor-preview-side{
+    position: relative !important;
+    float: right;
+    height: auto;
+    overflow: visible;
+  }
+}
+/* Style de base pour le conteneur Markdown */
+.editor-preview {
+  font-family: Arial, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  padding: 20px;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  margin: 0 auto;
+}
+
+.markdown-body{
+  /* Titres */
+   h1 {
+    font-size: 2em;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    border-bottom: 2px solid #e2e2e2;
+    padding-bottom: 0.3em;
+  }
+
+   h2 {
+    font-size: 1.75em;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    border-bottom: 1px solid #e2e2e2;
+    padding-bottom: 0.2em;
+  }
+
+   h3 {
+    font-size: 1.5em;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+  }
+
+   h4 {
+    font-size: 1.25em;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+  }
+
+   h5 {
+    font-size: 1em;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+  }
+
+   h6 {
+    font-size: 0.875em;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    color: #777;
+  }
+
+  /* Paragraphes */
+   p {
+    margin-bottom: 1.5em;
+  }
+
+  /* Listes */
+   ul,  ol {
+    padding-left: 1.5em;
+    margin-bottom: 1.5em;
+  }
+
+   ul li,  ol li {
+    margin-bottom: 0.5em;
+  }
+
+  /* Liens */
+   a {
+    color: #1a73e8;
+    text-decoration: none;
+  }
+
+   a:hover {
+    text-decoration: underline;
+  }
+
+  /* Blocs de code */
+   pre {
+    background-color: #f4f4f4;
+    border: 1px solid #ddd;
+    padding: 15px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.9em;
+    line-height: 1.4;
+  }
+
+   code {
+    background-color: #f4f4f4;
+    border: 1px solid #ddd;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.9em;
+  }
+
+  /* Citations */
+   blockquote {
+    border-left: 4px solid #ddd;
+    padding-left: 15px;
+    margin-left: 0;
+    margin-right: 0;
+    color: #555;
+    font-style: italic;
+    background-color: #f9f9f9;
+  }
+
+  /* Tables */
+   table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1.5em;
+  }
+
+   table,  th,  td {
+    border: 1px solid #ddd;
+  }
+
+   th,  td {
+    padding: 8px;
+    text-align: left;
+  }
+
+   th {
+    background-color: #f3f3f3;
+  }
+
+  /* Images */
+   img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin-bottom: 1.5em;
+  }
+
+  /* Horizontal Rules */
+   hr {
+    border: 0;
+    border-top: 1px solid #ddd;
+    margin: 2em 0;
+  }
+}
+html{
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+body{
+  font-family: 'Lato', sans-serif;
+  @apply bg-gray-50;
+  color:#08080a;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  header{
+    @apply h-16;
+    //height: 64px;
+    width: 100%;
+  }
+  #root{
+    height: 100%;
+    width: 100%;
+  }
+  main{
+    width: 100%;
+    height: calc(100vh - 4rem);
+  }
+}
+
+button{
+  &:focus,&:active{
+    box-shadow: none !important;
+    outline: none !important;
+  }
+}
+
+.p-nav-small .p-nav-item-text {
+  position: absolute;
+  visibility: hidden;
+}
+
+/* width */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  border-radius: 10px;
+  width: 10px;
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: lightgray;
+  border-radius: 10px;
+}
