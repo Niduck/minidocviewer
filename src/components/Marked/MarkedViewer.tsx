@@ -22,7 +22,6 @@ renderer.code = (code) => {
         // Retourner un div avec un ID unique et le code Mermaid comme contenu
         return `<div class="mermaid" id="${uniqueId}">${code.text}</div>`;
     } else {
-        // Utiliser le rendu par défaut pour les autres blocs de code
         const uniqueId = `code-${Math.random().toString(36).substring(2, 9)}`;
         return `
             <div class="relative group">
@@ -50,7 +49,7 @@ export function MarkedViewer({markdown}: { markdown: string }) {
             if (!codeBlock) return;
 
             navigator.clipboard.writeText(codeBlock.innerText).then(() => {
-                button.innerHTML = `<div class="icon icon-check"></div> Copié !`;
+                button.innerHTML = `<div class="icon icon-check"></div> Copied !`;
                 setTimeout(() => {
                     button.innerHTML = `<div class="icon icon-copy"></div> Copier`;
                 }, 2000);
@@ -67,13 +66,19 @@ export function MarkedViewer({markdown}: { markdown: string }) {
                 button.removeEventListener("click", onCopyButtonClick);
                 button.addEventListener("click", onCopyButtonClick);
             });
+
+            //activate mermaid
+            setTimeout(function () {
+                mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+            }, 300)
+
         });
 
-        // Observer la div contenant le Markdown pour détecter les changements
         const markdownContainer = document.getElementById("markdown-container");
         if (markdownContainer) {
             observer.observe(markdownContainer, {childList: true, subtree: true});
         }
+
 
         return () => observer.disconnect();
     }, [markdown]);

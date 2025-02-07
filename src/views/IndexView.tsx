@@ -3,20 +3,29 @@ import ProjectModal from "./components/ProjectModal";
 import ProjectsIDB from "../db/ProjectsIDB";
 import {Project} from "../interfaces/Project";
 import {Link} from "react-router-dom";
+import {Button} from "flowbite-react";
+import noop from "../utils/noop.ts";
 
 function IndexView() {
     const [projectModalOpen, setProjectModalOpen] = useState(false)
+    const [projectModalData, setProjectModalData] = useState<Project | null>(null)
     const [projects, setProjects] = useState<Project[]>([])
 
     //? Hooks : Effects
     useEffect(() => {
-        (async () => {
-            const projectsIDB = await ProjectsIDB;
-            const projects = await projectsIDB.all() as Project[];
-            setProjects(projects)
-        })()
+        loadProjects().then(noop);
 
     }, [])
+
+    async function loadProjects() {
+        const projectsIDB = await ProjectsIDB;
+        const projects = await projectsIDB.all() as Project[];
+        setProjects(projects)
+    }
+
+    useEffect(() => {
+        setProjectModalOpen(!!projectModalData)
+    }, [projectModalData])
     //? Template
     return (
         <>
@@ -30,33 +39,49 @@ function IndexView() {
                 <div className="w-1/3 text-xs gap-3 items-center justify-end flex"></div>
             </header>
             <main className={"p-6 flex gap-6"}>
-                <div className="m-auto w-2/4 justify-center gap-6 items-center flex flex-col">
+                <div className="mx-auto border rounded-xl w-2/ h-fit py-3 bg-white justify-start flex flex-col">
                     <div onClick={() => {
                         setProjectModalOpen(true)
                     }}
-                         className="hover:scale-105 opacity-60 gap-1.5 w-full hover:opacity-100 select-none transition-all cursor-pointer flex flex-col p-6 py-12 font-bold text-black border-blue-100 justify-center text-center bg-white rounded-md border w-fit h-fit  flex-col">
-                        Create a new projet
-                        <div className="font-light opacity-75">
-                            A projet can agregate multiple documentation sources
+                         className="opacity-40 gap-1.5 w-full hover:opacity-100 select-none transition-all cursor-pointer flex flex-col p-6 py-12 font-bold text-black border-blue-100 justify-center bg-white rounded-md">
+                        <div className="flex items-center gap-6">
+                            <div className="icon text-xl icon-circle-plus"></div>
+                            <div className="flex flex-col">
+                                Create a new projet
+                                <div className="font-light opacity-75">
+                                    A projet can agregate multiple documentation sources
+                                </div>
+                            </div>
                         </div>
                     </div>
                     {projects.map(project => (
-                        <Link to={'/reader'} state={project}
-                              className="hover:scale-105 gap-1.5 w-full select-none transition-all cursor-pointer flex flex-col p-6 font-bold   justify-center text-center bg-white  dark:bg-gray-600  rounded-md border w-fit h-fit  flex-col">
-                            <div className="text-xl">
-                                {project.name}
-                            </div>
-                            <div className="font-light text-sm opacity-60">
-                                [{project.sources.map((source, index) => (<>{source.name}{index < project.sources.length - 1 && ', '}</>))}]
+                        <Link key={project.id} to={'/reader'} state={project}
+                              className=" border-t gap-1.5 w-full select-none transition-all cursor-pointer flex flex-col p-6 font-bold   justify-center  bg-white  dark:bg-gray-600">
+
+                            <div className="flex items-center gap-6">
+                                <div className="flex w-full flex-col">
+                                    <div className="text-xl">
+                                        {project.name}
+                                    </div>
+                                    <div className="font-light text-sm opacity-60">
+                                        [{project.sources.map((source, index) => (<>{source.name}{index < project.sources.length - 1 && ', '}</>))}]
+                                    </div>
+                                </div>
+                                <Button size={"xs"} onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setProjectModalData(project)
+                                }}>
+
+                                    <div className="icon text-base icon-pencil"></div>
+                                </Button>
                             </div>
                         </Link>
                     ))}
                 </div>
             </main>
-            <ProjectModal isOpen={projectModalOpen} onClose={(data) => {
-                if (data) {
-                    setProjects(prevState => [...prevState, data])
-                }
+            <ProjectModal isOpen={projectModalOpen} defaultValue={projectModalData} onClose={() => {
+                loadProjects().then(noop)
                 setProjectModalOpen(false)
             }}/>
         </>

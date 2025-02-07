@@ -5,7 +5,7 @@ import {TreeNodeType} from "../../types/TreeNodeType.ts";
 type TreeNodeProps= {
     node:TreeNodeType,
     depth: number,
-    selectedFile: TreeNodeType,
+    selectedFile?: null|TreeNodeType,
     onFileSelect: (node:TreeNodeType)=>void
 }
 export default function TreeNode({node,depth=0, selectedFile, onFileSelect}:TreeNodeProps) {

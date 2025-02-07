@@ -1,14 +1,13 @@
 import {useEffect, useRef, useState} from "react";
-import mermaid from 'mermaid';
-import {useLocation} from "react-router-dom";
+import {Link, useLocation} from "react-router-dom";
 import {TreeInterface} from "../interfaces/TreeInterface";
 import Tree from "./components/Tree";
-import {FileHandleDecorator} from "../interfaces/FileHandleStorage";
 import {Button} from "flowbite-react";
-import Icon from "../components/Icon";
 import {MarkedViewer} from "../components/Marked/MarkedViewer.tsx";
 import {TreeNodeType} from "../types/TreeNodeType.ts";
 import {HeadingType} from "../types/HeadingType.ts";
+import MarkdownEditorModal from "./components/MarkdownEditorModal.tsx";
+import noop from "../utils/noop.ts";
 
 
 function ProjectView() {
@@ -18,39 +17,18 @@ function ProjectView() {
     //? States
     const [loading, setLoading] = useState<boolean>(false)
     const [files, setFiles] = useState<TreeInterface | null>(null)
+    const [selectedFile, setSelectedFile] = useState<TreeNodeType | null>(null)
     const [selectedMarkdownAsHTML, setSelectedMarkdownAsHTML] = useState<string>('')
     const [headings, setHeadings] = useState<null | HeadingType[]>([])
     const [missingPermission, setMissingPermission] = useState(false);
     const [activeId, setActiveId] = useState<string | null>(null);
-    const [observer, setObserver] = useState<IntersectionObserver | null>(null);
+    const [markdownModalOpen, setMarkdownModalOpen] = useState(false)
+    const [markdownModalData, setMarkdownModalData] = useState<TreeNodeType | null>(null)
     const markdownRef = useRef<HTMLDivElement>(null);
 
-    function activateSectionObserver() {
-        observer?.disconnect();
-        const mbody = document.querySelectorAll(".markdown-body")[0];
-        mbody.scrollTop = 0;
-        const headings = mbody.querySelectorAll("h1, h2");
-        setActiveId(headings[0].id)
-        if (headings.length === 0) return;
-
-        const _observer = new IntersectionObserver(
-            (entries) => {
-
-                entries.forEach((entry) => {
-                    if (entry.isIntersecting) {
-                        console.log("Active section:", entry.target.id);
-                        setActiveId(entry.target.id);
-                    }
-                });
-            },
-            {rootMargin: "100px 0px 0px 0px", threshold: 0, root: mbody}
-        );
-
-        headings.forEach((heading) => _observer.observe(heading));
-
-        setObserver(_observer)
-    }
-
+    useEffect(() => {
+        setMarkdownModalOpen(!!markdownModalData)
+    }, [markdownModalData])
     //? Functions
     useEffect(() => {
 
@@ -59,42 +37,45 @@ function ProjectView() {
         }
     }, [files])
     useEffect(() => {
-        (async () => {
-            if (!project.sources || project.sources.length === 0) {
-                console.log("Aucune source sélectionnée");
-                return;
-            }
-
-            setLoading(true);
-            let prevData = undefined;
-
-            let hasAccess = true;
-            for (const source of project.sources) {
-                if (!source) continue;
-
-                const granted = await ensurePermission(source);
-                if (!granted) {
-                    hasAccess = false;
-                    continue;
-                }
-
-                const data = await walkDirectoryAsPath(source, '', prevData);
-                prevData = data;
-            }
-
-            if (prevData) {
-                setFiles(prevData);
-            }
-
-            setMissingPermission(!hasAccess); // Active le bouton si une permission est refusée
-        })();
+        loadProject().then(noop)
     }, []);
+
+    async function loadProject() {
+        if (!project.sources || project.sources.length === 0) {
+            console.log("Aucune source sélectionnée");
+            return;
+        }
+
+        setLoading(true);
+        let prevData = undefined;
+
+        let hasAccess = true;
+        for (const source of project.sources) {
+            if (!source) continue;
+
+            const permission = await ensurePermission(source);
+            if (permission !== 'granted') {
+                hasAccess = false;
+                continue;
+            }
+
+            prevData = await walkDirectoryAsPath(source, '', prevData);
+        }
+
+        if (prevData) {
+            setFiles(prevData);
+        }
+
+        setMissingPermission(!hasAccess);
+    }
 
     async function requestPermissions() {
         for (const source of project.sources) {
-            await source.requestPermission({mode: 'read'}); // Doit être dans un événement utilisateur
+
+            await source.requestPermission({mode: 'readwrite'});
         }
-        setMissingPermission(false); // Cacher le bouton après autorisation
+        loadProject().then(noop)
+        setMissingPermission(false);
     }
 
     function scrollToSection(id: string) {
@@ -110,8 +91,9 @@ function ProjectView() {
     }
 
     async function ensurePermission(dirHandle: FileSystemDirectoryHandle) {
-        const permission = await dirHandle.queryPermission({mode: 'read'});
-        return permission === 'granted';
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        return await dirHandle.queryPermission({mode: 'readwrite'});
     }
 
     async function walkDirectoryAsPath(directoryEntry: FileSystemDirectoryHandle, path: string = '', resultAsPath: TreeNodeType = {
@@ -253,26 +235,23 @@ function ProjectView() {
         });
     }
 
-    async function handleFileSelected(file: FileHandleDecorator) {
-        const _file = await file.fileHandle.getFile();
+    async function handleFileSelected(file: TreeNodeType) {
+        const _file = await file.fileHandle?.getFile();
+        setSelectedFile(file)
+        if (!_file) {
+            return;
+        }
         const contents = await _file.text();
         // const markdown = await marked(contents)
         setSelectedMarkdownAsHTML(contents)
         const headings = extractHeadings(contents);
         setHeadings(headings);
-
-
-        setTimeout(function () {
-            mermaid.init(undefined, document.querySelectorAll('.mermaid'));
-            activateSectionObserver();
-        }, 500)
     }
 
     function extractHeadings(markdown: string): null | HeadingType[] {
         const lines = markdown.split("\n");
         const headings = lines
             .map(line => {
-                console.log(line)
                 const match = line.match(/^(#{1,2})\s+(.*)/); // Regex pour détecter les titres Markdown
                 if (!match) return null;
                 return {
@@ -296,27 +275,61 @@ function ProjectView() {
                                                                         style={{fontFamily: "Asap"}}>docviewer</span>
                     </div>
                 </div>
-                <div className="w-1/3 flex items-center justify-center">
+                <div className="w-1/3 flex gap-3 items-center relative justify-center">
+
+
                     <div className="text-lg">
                         {project.name}
                     </div>
                 </div>
-                <div className="w-1/3 text-xs gap-3 items-center justify-end flex"></div>
+                <div className="w-1/3 text-xs gap-3 items-center justify-end flex">
+                    <Link to={"/"}
+                          className={"border flex gap-1.5 left-0 font-normal opacity-50 hover:opacity-100 rounded-md py-1.5 px-3 text-sm cursor-pointer hover:bg-gray-100"}>
+                        <div className={"icon icon-arrow-left"}/>
+                        Back to projects
+                    </Link>
+                </div>
             </header>
 
             {missingPermission ? (
-                <button onClick={requestPermissions}>
-                    🔓 Autoriser l’accès aux fichiers
-                </button>
+                <div className="h-full w-full gap-3  flex-col bg-white flex items-center justify-center">
+                    <div className="flex flex-col w-1/3 gap-3 p-6 justify-center items-center bg-gray-100 rounded-xl">
+                        <div className="icon text-3xl icon-user-check"></div>
+                        <div className="flex flex-col text-center gap-1  text-base">
+                            <p>
+                                Minidoc needs permission to access your documentation folder to display, edit, and
+                                organize your
+                                Markdown files. Without these permissions, we cannot load your documentation or save
+                                your changes.
+                            </p>
+
+                        </div>
+                        <Button onClick={requestPermissions}>Authorize</Button>
+                        <p className="flex  p-3  flex-col text-center gap-1 opacity-60 text-sm">
+                            If this message persists, it means that at least one of the selected sources has been
+                            explicitly denied access. This prevents us from displaying or modifying your files. Please
+                            check your browser settings to allow file access and try again, or remove the denied folder
+                            from the sources.
+                        </p>
+                    </div>
+
+                </div>
             ) : (<>
                 {loading ? (
 
-                    <div className={"w-full h-full flex justify-center items-center flex-col"}>
-                        <div
-                            className="bg-white dark:bg-gray-800 text-center p-6 flex  text-black flex-col rounded-md shadow-md">
-                            <div className={"font-bold text-lg"}>Please wait few seconds...</div>
-                            <div className={"opacity-40"}>Scanning directories to locate <strong>.md</strong> files and
-                                organizing the summary based on <strong>[MNDW]</strong> header comments.
+                    <div className={"w-full h-full bg-white flex justify-center items-center flex-col"}>
+                        <div className="flex flex-col gap-3 p-6 justify-center items-center bg-gray-100 rounded-xl">
+                            <div className="icon text-3xl icon-loader-circle animate-spin"></div>
+                            <div className="flex flex-col text-center gap-1 opacity-60 text-sm">
+                                <p>
+                                    Minidoc is scanning your documentation files.
+                                </p>
+                                <p>
+                                    This may take a few moments depending on the number of files.
+                                </p>
+                                <p>
+                                    Please wait...
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -344,9 +357,15 @@ function ProjectView() {
                             </div>
                         </div>
                         <nav className="flex shrink-0 w-80 border-l bg-white py-6 print:hidden gap-3 flex-col">
-                            <div className="w-fit shrink-0 m-auto">
-                                <Button onClick={print} color={"light"}>
-                                    <Icon name={"print"} size={16}/></Button>
+                            <div className="w-fit flex gap-3 shrink-0 m-auto">
+                                <Button title="Print" onClick={print} color={"light"}>
+                                    <div className="icon text-sm icon-printer"></div>
+                                </Button>
+                                <Button title="Edit markdown" onClick={() => {
+                                    setMarkdownModalData(selectedFile)
+                                }} color={"light"}>
+                                    <div className="icon text-sm icon-square-pen"></div>
+                                </Button>
                             </div>
                             <div className="flex grow py-3  flex-col border-t">
 
@@ -354,10 +373,10 @@ function ProjectView() {
                                     contents</h2>
                                 {headings && (
                                     <div className="flex flex-col py-3 gap-3 px-6">
-                                        {headings.map(heading => (
-                                            <a onClick={(e) => {
-                                                e.preventDefault(); // Évite le scroll global
-                                                scrollToSection(heading.id); // Scroll le markdown uniquement
+                                        {headings.map((heading, index) => (
+                                            <a key={index} onClick={(e) => {
+                                                e.preventDefault();
+                                                scrollToSection(heading.id);
                                             }}
                                                className={`text-sm px-3 ${activeId === heading.id && "border-l-2 font-bold border-blue-400"}`}
                                                href={'#' + heading.id}>{heading.text}</a>
@@ -369,7 +388,9 @@ function ProjectView() {
                     </main>
                 )}
             </>)}
-
+            <MarkdownEditorModal isOpen={markdownModalOpen} defaultValue={markdownModalData} onClose={() => {
+                setMarkdownModalData(null)
+            }}/>
         </>
     )
 }
