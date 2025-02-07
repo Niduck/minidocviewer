@@ -1,6 +1,6 @@
-import {FileHandleDecorator} from "./FileHandleStorage";
 
 export interface Project {
+    id?:string,
     name: string,
-    sources: FileHandleDecorator[]
+    sources: FileSystemFileHandle[]
 }

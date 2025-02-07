@@ -1,9 +1,8 @@
-import {Button, Label, Modal, Textarea, TextInput, Tooltip} from "flowbite-react";
+import {Button, Label, Modal, TextInput} from "flowbite-react";
 import {Project} from "../../interfaces/Project";
-import {useEffect, useRef, useState} from "react";
+import { useRef, useState} from "react";
 import uniqid from 'uniqid';
 import ProjectsIDB from "../../db/ProjectsIDB";
-import {FileHandleDecorator} from "../../interfaces/FileHandleStorage";
 
 function ProjectModal({
                           isOpen,
@@ -11,7 +10,7 @@ function ProjectModal({
                           defaultValue
                       }: { isOpen: boolean, onClose: (data?: Project) => void, defaultValue?: Project | null }) {
 
-    const [formData, setFormData] = useState(defaultValue || {name: "My super project", sources: []})
+    const [formData, setFormData] = useState<Project>(defaultValue || { name: "My super project", sources: []})
     const formRef = useRef(null)
 
     function _onClose(data?:Project) {
@@ -20,12 +19,14 @@ function ProjectModal({
 
     async function AskReadDirectory() {
         try {
-
-            // Cette fonctionnalité peut ne pas être supportée dans tous les navigateurs.
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
             if (!window.showDirectoryPicker) {
                 alert('Votre navigateur ne supporte pas l\'API File System Access.');
                 return;
             }
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
             const directoryHandle = await window.showDirectoryPicker();
             setFormData(prevState => {
                 return {...prevState, sources: [...prevState.sources, directoryHandle]};

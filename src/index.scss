@@ -56,7 +56,7 @@ svg{
   color:currentColor;
 }
 .markdown-body{
-  height: 80vh;
+  height: 100%;
   overflow: auto;
   .CodeMirror-fullscreen{
     position: relative !important;
@@ -224,7 +224,7 @@ html{
 }
 body{
   font-family: 'Lato', sans-serif;
-  @apply bg-gray-50;
+  @apply bg-gray-100  dark:bg-gray-800 ;
   color:#08080a;
   overflow: hidden;
   height: 100%;
@@ -271,4 +271,44 @@ button{
 ::-webkit-scrollbar-thumb {
   background: lightgray;
   border-radius: 10px;
+}
+
+
+.h-print {
+  min-height: calc(3508px / 4);
+  height: auto;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  html, body, #root {
+    font-size: 11px !important;
+    width: 210mm !important;
+    height: auto !important;
+    overflow: visible;
+    //height: 297mm;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .printable * {
+    width: 100%;
+    height: auto;
+    visibility: visible;
+  }
+  .markdown-body{
+    height: max-content !important;
+    overflow: visible;
+    img{
+      width: auto;
+    }
+  }
+}
+details{
+  page-break-inside: avoid !important; /* Éviter qu'un saut de page ne se produise dans le titre */
+
+  //page-break-before: auto; /* Toujours ajouter un saut de page avant cet élément */
 }

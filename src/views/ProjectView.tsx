@@ -1,211 +1,163 @@
-import React, {useEffect, useState} from "react";
+import {useEffect, useRef, useState} from "react";
+import mermaid from 'mermaid';
+import {useLocation} from "react-router-dom";
+import {TreeInterface} from "../interfaces/TreeInterface";
+import Tree from "./components/Tree";
+import {FileHandleDecorator} from "../interfaces/FileHandleStorage";
 import {Button} from "flowbite-react";
 import Icon from "../components/Icon";
-import {FileHandleDecorator} from "../interfaces/FileHandleStorage";
-import {marked} from "marked";
-import admonition from "marked-admonition-extension";
-import {twMerge} from "tailwind-merge";
-import mermaid from 'mermaid';
-import {useLocation, useParams} from "react-router-dom";
-import ProjectsIDB from "../db/ProjectsIDB";
-import {Project} from "../interfaces/Project";
-
-marked.use(admonition);
-// Initialiser Mermaid
-mermaid.initialize({
-    startOnLoad: false, // Nous initialiserons manuellement chaque diagramme
-    theme: 'neutral'
-});
-
-// Créer un renderer personnalisé pour Marked
-const renderer = new marked.Renderer();
-
-// Redéfinir la méthode code pour capturer les blocs de code Mermaid
-renderer.code = (code) => {
-    if (code.lang === 'mermaid') {
-        // Générer un ID unique pour le diagramme
-        const uniqueId = `mermaid-${Math.random().toString(36).substring(2, 9)}`;
-
-        // Retourner un div avec un ID unique et le code Mermaid comme contenu
-        return `<div class="mermaid" id="${uniqueId}">${code.text}</div>`;
-    } else {
-        // Utiliser le rendu par défaut pour les autres blocs de code
-        return `<pre><code>${code.text}</code></pre>`;
-    }
-};
-marked.setOptions({
-    renderer: renderer,
-    gfm: true, // Utiliser la syntaxe GitHub Flavored Markdown
-    breaks: true, // Convertir les sauts de ligne en <br>
-});
-
-function Tree({data, onFileSeclected}) {
-    const [selectedFile, setSelectedFile] = useState(null);
-
-    const handleFileSelect = (file) => {
-        setSelectedFile(file);
-        onFileSeclected?.(file)
-        // Vous pouvez également remonter cet événement à un composant parent via une prop onFileSelect
-    };
-    if (!data) {
-        return null;
-    }
-    return (
-        <div className={"flex flex-col gap-1.5"}>
-
-            {data.children?.map((node, index) => (
-                <TreeNode key={index} node={node} selectedFile={selectedFile} onFileSelect={handleFileSelect}/>
-            ))}
-        </div>
-    );
-}
-
-function TreeNode({node, selectedFile, onFileSelect}) {
-
-    const [open, setOpen] = useState(false)
-    const handleClick = () => {
-        if (node.kind === 'file') {
-            onFileSelect(node);
-        }
-    };
-
-    return (
-        <div className={`${node.kind === 'dir' ? 'ml-7' : 'ml-7'}  flex flex-col gap-1.5`}>
-            {node.kind === 'dir' ? (
-                <div onClick={() => {
-                    setOpen(!open)
-                }}
-                     className={twMerge('flex items-center  gap-1.5 p-1.5 bg-white rounded-md   text-gray-400 cursor-pointer hover:opacity-100 hover:font-medium ', open && 'text-black')}
-                >
-                    <Icon name={"folder"} size={16}></Icon>
-                    <div>{node.name}</div>
-                </div>
-            ) : (
-                <div onClick={handleClick}
-                     className={twMerge('flex items-center bg-white text-gray-400 rounded-md gap-1.5 p-1.5 cursor-pointer opacity-80 hover:opacity-100 hover:font-medium', selectedFile?.path === node?.path && 'text-black font-bold opacity-100')}>
-                    <Icon name={"textbook"} size={16}></Icon>
-                    <div>{node.name}</div>
-                </div>
-            )}
-            {open && node.children && node.children.length > 0 && (
-                <div className={"flex flex-col gap-1.5"}>
-                    {node.children.map((childNode, index) => (
-                        <TreeNode key={index} node={childNode} selectedFile={selectedFile} onFileSelect={onFileSelect}/>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
+import {MarkedViewer} from "../components/Marked/MarkedViewer.tsx";
+import {TreeNodeType} from "../types/TreeNodeType.ts";
+import {HeadingType} from "../types/HeadingType.ts";
 
 
 function ProjectView() {
 
-    const {state : project} = useLocation();
+    const {state: project} = useLocation();
 
     //? States
     const [loading, setLoading] = useState<boolean>(false)
-    const [files, setFiles] = useState<never|null>(null)
-    const [selectedMarkdown, setSelectedMarkdown] = useState<string>('')
+    const [files, setFiles] = useState<TreeInterface | null>(null)
     const [selectedMarkdownAsHTML, setSelectedMarkdownAsHTML] = useState<string>('')
-    const [selectedMarkdownKey, setSelectedMarkdownKey] = useState<string>('')
-    const [fileHandles, setFileHandles] = useState<FileHandleDecorator[]>([])
-    const [fileHandle, setFileHandle] = useState<FileHandleDecorator | null>(null)
+    const [headings, setHeadings] = useState<null | HeadingType[]>([])
+    const [missingPermission, setMissingPermission] = useState(false);
+    const [activeId, setActiveId] = useState<string | null>(null);
+    const [observer, setObserver] = useState<IntersectionObserver | null>(null);
+    const markdownRef = useRef<HTMLDivElement>(null);
 
-    const params = useParams()
+    function activateSectionObserver() {
+        observer?.disconnect();
+        const mbody = document.querySelectorAll(".markdown-body")[0];
+        mbody.scrollTop = 0;
+        const headings = mbody.querySelectorAll("h1, h2");
+        setActiveId(headings[0].id)
+        if (headings.length === 0) return;
 
-    //? Functions
-    useEffect(()=>{
-        if(files){
-            setLoading(false)
-        }
-    },[files])
-    useEffect(()=>{
-        (async ()=>{
-            setLoading(true)
-            // let files = [];
-            let prevData = null;
-            for(const source of project.sources){
-                console.log(source)
-                const data = await walkDirectoryAsPath(source, '', prevData);
-                prevData =data;
-                // console.log(data)
-                // files =  data;
-            }
-            setFiles(prevData)
-        })()
-    },[])
-    async function walkDirectory(directoryEntry, path = '') {
-        const result = {
-            id: path,
-            name: directoryEntry.name,
-            children: [],
-            kind: 'dir',
-            path: path
-        };
+        const _observer = new IntersectionObserver(
+            (entries) => {
 
-        for await (const entry of directoryEntry.values()) {
-            const currentPath = `${path}/${entry.name}`;
-            if (entry.kind === 'file' && entry.name.endsWith('.md')) {
-                result.children.push({
-                    id: currentPath,
-                    kind: 'file',
-                    fileHandle: entry,
-                    path: currentPath,
-                    name: entry.name,
-                    parent: directoryEntry.name,
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        console.log("Active section:", entry.target.id);
+                        setActiveId(entry.target.id);
+                    }
                 });
-            } else if (entry.kind === 'directory' && !['node_modules', 'vendor'].includes(entry.name)) {
-                const subDirectory = await walkDirectory(entry, currentPath);
-                if (subDirectory && subDirectory.children.length > 0) {
-                    result.children.push(subDirectory);
-                }
-            }
-        }
-        return result;
+            },
+            {rootMargin: "100px 0px 0px 0px", threshold: 0, root: mbody}
+        );
+
+        headings.forEach((heading) => _observer.observe(heading));
+
+        setObserver(_observer)
     }
 
-    async function walkDirectoryAsPath(directoryEntry, path = '', resultAsPath = null) {
-        resultAsPath = resultAsPath ?? {
-            id: path,
-            name: 'Doc',
-            children: [],
-            kind: 'dir',
-            path: path
-        };
+    //? Functions
+    useEffect(() => {
+
+        if (files) {
+            setLoading(false)
+        }
+    }, [files])
+    useEffect(() => {
+        (async () => {
+            if (!project.sources || project.sources.length === 0) {
+                console.log("Aucune source sélectionnée");
+                return;
+            }
+
+            setLoading(true);
+            let prevData = undefined;
+
+            let hasAccess = true;
+            for (const source of project.sources) {
+                if (!source) continue;
+
+                const granted = await ensurePermission(source);
+                if (!granted) {
+                    hasAccess = false;
+                    continue;
+                }
+
+                const data = await walkDirectoryAsPath(source, '', prevData);
+                prevData = data;
+            }
+
+            if (prevData) {
+                setFiles(prevData);
+            }
+
+            setMissingPermission(!hasAccess); // Active le bouton si une permission est refusée
+        })();
+    }, []);
+
+    async function requestPermissions() {
+        for (const source of project.sources) {
+            await source.requestPermission({mode: 'read'}); // Doit être dans un événement utilisateur
+        }
+        setMissingPermission(false); // Cacher le bouton après autorisation
+    }
+
+    function scrollToSection(id: string) {
+        const target = document.getElementById(id);
+        const container = markdownRef.current; // Récupère le conteneur scrollable
+        setActiveId(id)
+        if (target && container) {
+            container.scrollTo({
+                top: target.offsetTop - container.offsetTop, // Ajustement pour bien centrer
+                behavior: "smooth",
+            });
+        }
+    }
+
+    async function ensurePermission(dirHandle: FileSystemDirectoryHandle) {
+        const permission = await dirHandle.queryPermission({mode: 'read'});
+        return permission === 'granted';
+    }
+
+    async function walkDirectoryAsPath(directoryEntry: FileSystemDirectoryHandle, path: string = '', resultAsPath: TreeNodeType = {
+        id: path,
+        name: 'Doc',
+        children: [],
+        kind: 'dir',
+        path: path
+    }) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
         for await (const entry of directoryEntry.values()) {
             const currentPath = `${path}/${entry.name}`;
             if (entry.kind === 'file' && entry.name.endsWith('.md')) {
                 //path
-                const fileContent = await entry.getFile().then(file => file.text());
+                const fileContent = await entry.getFile().then((file: File) => file.text());
                 const firstLine = fileContent.split('\n')[0];  // Obtenir la première ligne
 
-                // const regex = /<!--\[MNDW\]\{path:"(.*?)"\}-->/;
                 const regex = /<!--\[MNDW\](?<json>\{.*\})-->/;
                 const match = firstLine.match(regex);
                 if (match) {
-                    console.log(match)
-                    try{
+                    try {
                         const json = JSON.parse(match.groups.json);
                         const customPath = json.path ? json.path : currentPath;
                         const segments = customPath.split('/');
 
-                        // Parcourir les segments pour construire l'arborescence
                         const segmentsMap = []
                         let currentResult = resultAsPath;
                         for (let i = 0; i < segments.length; i++) {
                             const segment = segments[i];
+                            const [icon = null, name] = segment.includes('::') ? segment.split('::') : [null, segment];
+                            let index = currentResult.children.findIndex(item => item.name === name);
 
-                            let index = currentResult.children.findIndex(item => item.name === segment);
                             if (index < 0) {
                                 currentResult.children.push({
                                     id: segments.slice(0, i + 1).join('/'),
-                                    name: segment,
+                                    name: name,
+                                    icon: icon,
                                     children: [],
                                     kind: 'dir'
                                 })
                                 index = currentResult.children.length - 1;
                             }
+                            const data = currentResult.children[index];
+                            data.icon = icon;
+                            currentResult.children[index] = data;
                             segmentsMap.push(index)
                             currentResult = currentResult.children[index]
                         }
@@ -214,18 +166,21 @@ function ProjectView() {
                         for (const index of segmentsMap) {
                             current = current.children[index]
                         }
-                        if(current){
+                        if (current) {
+                            const fileName = json.title || entry.name
+                            const [icon = null, name] = fileName.includes('::') ? fileName.split('::') : [null, fileName];
 
                             current.children.push({
                                 id: currentPath,
                                 kind: 'file',
-                                fileHandle: entry,
+                                fileHandle: entry as FileSystemFileHandle,
                                 path: currentPath,
-                                name: json.title || entry.name,
+                                icon: icon,
+                                name: name,
                                 parent: directoryEntry.name,
-                            })
+                            } as TreeNodeType)
                         }
-                    }catch(e){
+                    } catch (e) {
                         console.log("Malformed json", e, match)
                     }
 
@@ -237,44 +192,97 @@ function ProjectView() {
         }
         return resultAsPath;
     }
-    async function AskReadDirectory() {
-        try {
-            // Cette fonctionnalité peut ne pas être supportée dans tous les navigateurs.
-            if (!window.showDirectoryPicker) {
-                alert('Votre navigateur ne supporte pas l\'API File System Access.');
-                return;
-            }
 
-            const directoryHandle = await window.showDirectoryPicker();
-            // const newFiles = [];
-            let newFiles = await walkDirectoryAsPath(directoryHandle)
-            // let newFiles = await walkDirectory(directoryHandle)
-            // for await (const entry of directoryHandle.values()) {
-            //     if (entry.kind === 'file' && entry.name.endsWith('.md')) {
-            //         // On suppose que tu veux traiter uniquement les fichiers Markdown.
-            //         newFiles.push(entry.name);
-            //     }
-            // }
-            console.log(newFiles)
-            setFiles(newFiles);
-        } catch (error) {
-            console.error('Error accessing directory:', error);
-            alert('Une erreur est survenue lors de la tentative d\'accès au dossier.');
-        }
+    function convertSvgToPng(svgElement: SVGSVGElement): Promise<HTMLImageElement> {
+        return new Promise((resolve, reject) => {
+            if (!svgElement) return reject("SVG Element is null");
+
+            const width = svgElement.viewBox.baseVal.width || svgElement.getBBox().width;
+            const height = svgElement.viewBox.baseVal.height || svgElement.getBBox().height;
+
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return reject("Impossible d'obtenir le contexte 2D");
+
+            const svgData = new XMLSerializer().serializeToString(svgElement);
+            const img = new Image();
+            img.crossOrigin = "anonymous"; // Évite les problèmes CORS
+
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, width, height);
+                const pngDataUrl = canvas.toDataURL("image/png");
+
+                const pngImage = new Image();
+                pngImage.src = pngDataUrl;
+                pngImage.alt = "Diagramme converti en PNG";
+
+                resolve(pngImage);
+            };
+
+            img.onerror = (e) => reject(e);
+            img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgData)))}`;
+        });
     }
 
-    async function handleFileSelected(file) {
+    function print(): void {
+        // Ouvrir tous les éléments `<details>`
+        document.querySelectorAll("details").forEach((item) => item.setAttribute("open", "open"));
+
+        // Convertir tous les diagrammes Mermaid en PNG
+        const diagrams = Array.from(document.getElementsByClassName("mermaid"));
+        const promises: Promise<void>[] = diagrams.map(async (diagram) => {
+            if (!(diagram instanceof HTMLElement) || !diagram.firstChild) return;
+
+            const svgElement = diagram.firstChild as SVGSVGElement;
+            if (svgElement.style.display === "none") return;
+
+            try {
+                const pngImage = await convertSvgToPng(svgElement);
+                diagram.appendChild(pngImage);
+                svgElement.style.display = "none"; // Masquer l'ancien SVG
+            } catch (error) {
+                console.error("Erreur lors de la conversion SVG → PNG :", error);
+            }
+        });
+
+        // Attendre la conversion des images avant d'imprimer
+        Promise.all(promises).then(() => {
+            setTimeout(() => window.print(), 500);
+        });
+    }
+
+    async function handleFileSelected(file: FileHandleDecorator) {
         const _file = await file.fileHandle.getFile();
         const contents = await _file.text();
-        console.log(marked)
-        const markdown = await marked(contents)
-        setSelectedMarkdown(contents)
-        setSelectedMarkdownAsHTML(markdown)
-        setSelectedMarkdownKey(Date.now())
-        setTimeout(function (){
+        // const markdown = await marked(contents)
+        setSelectedMarkdownAsHTML(contents)
+        const headings = extractHeadings(contents);
+        setHeadings(headings);
 
-        mermaid.init(undefined, document.querySelectorAll('.mermaid'));
-        },500)
+
+        setTimeout(function () {
+            mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+            activateSectionObserver();
+        }, 500)
+    }
+
+    function extractHeadings(markdown: string): null | HeadingType[] {
+        const lines = markdown.split("\n");
+        const headings = lines
+            .map(line => {
+                console.log(line)
+                const match = line.match(/^(#{1,2})\s+(.*)/); // Regex pour détecter les titres Markdown
+                if (!match) return null;
+                return {
+                    level: match[1].length,
+                    text: match[2],
+                    id: match[2].toLowerCase().replace(/\s+/g, "-")
+                } as HeadingType;
+            })
+            .filter(Boolean);
+        return headings as HeadingType[];
     }
 
     //? Template
@@ -282,49 +290,86 @@ function ProjectView() {
         <>
 
             <header
-                className="flex px-6  justify-center bg-white  w-full border-b border-gray-100 text-2xl tracking-wide font-light items-center">
+                className="flex px-6 shrink-0  justify-center bg-white dark:bg-gray-800  w-full border-b  text-2xl tracking-wide font-light items-center">
                 <div className="w-1/3">
-                </div>
-                <div className="w-1/3 flex items-center justify-center">
-                    <img src={'logo.png'} className={"h-8"}/>
-                    <div className={"ml-1.5 text-blue-700"}>mini<span className={"font-bold"}
-                                                        style={{fontFamily: "Asap"}}>docviewer</span></div>
-
-                </div>
-                <div className="w-1/3 text-xs gap-3 items-center justify-end flex">
-
-                </div>
-            </header>
-
-            {loading ? (
-
-                <div className={"w-full h-full flex justify-center items-center flex-col"}>
-                    <div className="bg-white text-center p-6 flex  text-blue-700 flex-col rounded-md shadow-md">
-                        <div className={"font-bold text-lg"}>Please wait few seconds...</div>
-                        <div className={"opacity-40"}>Scanning directories to locate <strong>.md</strong> files and organizing the summary based on <strong>[MNDW]</strong> header comments.</div>
+                    <div className={"ml-1.5 dark:text-white"}>mini<span className={"font-bold"}
+                                                                        style={{fontFamily: "Asap"}}>docviewer</span>
                     </div>
                 </div>
+                <div className="w-1/3 flex items-center justify-center">
+                    <div className="text-lg">
+                        {project.name}
+                    </div>
+                </div>
+                <div className="w-1/3 text-xs gap-3 items-center justify-end flex"></div>
+            </header>
 
-            ) : (
-                <main className={"p-6 flex gap-6"}>
-                    <nav className="flex w-1/4 gap-3 flex-col">
-                        {files && (
-                            <Tree data={files} onFileSeclected={handleFileSelected}></Tree>
-                        )}
-                    </nav>
+            {missingPermission ? (
+                <button onClick={requestPermissions}>
+                    🔓 Autoriser l’accès aux fichiers
+                </button>
+            ) : (<>
+                {loading ? (
 
-                    <div className="w-3/4 h-full">
-                        <section className="bg-white rounded-md shadow-sm w-full px-3 py-3">
-                            <div className={"w-full markdown-body px-3 py-3"}>
-                                {selectedMarkdownAsHTML && (
-                                    <div dangerouslySetInnerHTML={{__html: selectedMarkdownAsHTML}}>
+                    <div className={"w-full h-full flex justify-center items-center flex-col"}>
+                        <div
+                            className="bg-white dark:bg-gray-800 text-center p-6 flex  text-black flex-col rounded-md shadow-md">
+                            <div className={"font-bold text-lg"}>Please wait few seconds...</div>
+                            <div className={"opacity-40"}>Scanning directories to locate <strong>.md</strong> files and
+                                organizing the summary based on <strong>[MNDW]</strong> header comments.
+                            </div>
+                        </div>
+                    </div>
+
+                ) : (
+                    <main className={"print:w-full grow  flex -6"}>
+                        <nav
+                            className="flex shrink-0 w-64 dark:bg-gray-800 bg-white border-r  dark:border-gray-600 print:hidden gap-3 flex-col">
+                            {files && (
+                                <Tree data={files} onFileSelected={handleFileSelected}></Tree>
+                            )}
+                        </nav>
+
+                        <div className="grow bg-white print:w-full h-full">
+                            <div className="flex h-full flex-col gap-1.5">
+                                <section className=" printable h-full px-3  w-full  screen:py-3">
+                                    <div ref={markdownRef} className={"w-full markdown-body h-full px-3 py-3"}>
+                                        {selectedMarkdownAsHTML && (
+                                            <MarkedViewer markdown={selectedMarkdownAsHTML}></MarkedViewer>
+                                            // <div dangerouslySetInnerHTML={{__html: selectedMarkdownAsHTML}}>
+                                            // </div>
+                                        )}
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+                        <nav className="flex shrink-0 w-80 border-l bg-white py-6 print:hidden gap-3 flex-col">
+                            <div className="w-fit shrink-0 m-auto">
+                                <Button onClick={print} color={"light"}>
+                                    <Icon name={"print"} size={16}/></Button>
+                            </div>
+                            <div className="flex grow py-3  flex-col border-t">
+
+                                <h2 className={"text-center opacity-75 text-sm font-bold uppercase"}>Table of
+                                    contents</h2>
+                                {headings && (
+                                    <div className="flex flex-col py-3 gap-3 px-6">
+                                        {headings.map(heading => (
+                                            <a onClick={(e) => {
+                                                e.preventDefault(); // Évite le scroll global
+                                                scrollToSection(heading.id); // Scroll le markdown uniquement
+                                            }}
+                                               className={`text-sm px-3 ${activeId === heading.id && "border-l-2 font-bold border-blue-400"}`}
+                                               href={'#' + heading.id}>{heading.text}</a>
+                                        ))}
                                     </div>
                                 )}
                             </div>
-                        </section>
-                    </div>
-                </main>
-            )}
+                        </nav>
+                    </main>
+                )}
+            </>)}
+
         </>
     )
 }

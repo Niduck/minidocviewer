@@ -1,4 +1,4 @@
 export interface FileHandleDecorator{
     key:string,
-    fileHandle:FileSystemFileHandle|FileSystemDirectoryHandle
+    fileHandle:FileSystemFileHandle
 }

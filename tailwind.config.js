@@ -1,11 +1,16 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
     'node_modules/flowbite-react/lib/esm/**/*.js',
   ],
   theme: {
     extend: {
+      screens: {
+        print: { raw: 'print' },
+        screen: { raw: 'screen' },
+      },
       colors: {
         //cyan is the default color of Flowbite; Instead of writing a custom theme the colors are ajusted here.
         'cyan': {
